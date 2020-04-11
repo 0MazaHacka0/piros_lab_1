@@ -21,16 +21,18 @@ struct Block {
 struct File {
     int64 file_id;
     int64 blocks_count;
-    int64 *blocks;
+    int64 *blocks_ids;
 };
 
 struct Disk {
     int64 size;
 
     int64 file_last_id;
+    int64 files_count;
     struct File *files;
 
     int64 block_last_id;
+    int64 blocks_count;
     struct Block *blocks;
 };
 
@@ -40,21 +42,40 @@ struct Command {
     int64 file_size;
 };
 
+void block_init(struct Block *block, int64 start, int64 size, int64 file_id)
+{
+    block->start = start;
+    block->size = size;
+    block->file_id = file_id;
+}
+
 void disk_init(struct Disk *disk, int64 size)
 {
     disk->size = size;
 
+    // Block init
     disk->block_last_id = 0;
-    disk->blocks = malloc(sizeof(struct Block));
-    disk->blocks[0].size = size;
+    disk->blocks_count = 1;
+    disk->blocks = (struct Block *) malloc(sizeof(struct Block));
+    block_init(&disk->blocks[0], 0, size, -1);
 
+    // Files init
     disk->file_last_id = 0;
+    disk->files_count = 0;
 }
 
-void disk_erase(struct Disk *disk)
-{
-    memset(disk->blocks, 0, sizeof(struct Block));
+void disk_erase(struct Disk *disk) {
+    // Erase files
+    disk->file_last_id = 0;
+    disk->files_count = 0;
+    free(disk->files);
+
+    // Erase blocks
     disk->block_last_id = 0;
+    disk->blocks_count = 1;
+    free(disk->blocks);
+    disk->blocks = (struct Block *) malloc(sizeof(struct Block));
+    block_init(&disk->blocks[0], 0, disk->size, -1);
 }
 
 int64 first_fit(int64 size, struct Block *blocks, int64 block_count, int64 block_last_id)
@@ -129,35 +150,46 @@ int block_comparator(const void *p, const void *q)
     return p_start - q_start;
 }
 
+void fragmentation(struct Disk *disk)
+{
+
+}
+
 void defragmentation(struct Disk *disk)
 {
-    qsort(disk->blocks, sizeof(struct Block) * disk->block_last_id, sizeof(struct Block), block_comparator);
+    qsort(disk->blocks, sizeof(struct Block) * disk->blocks_count, sizeof(struct Block), block_comparator);
 
     int64 count_zero_blocks = 0;
-    for (int64 i = 0; i < disk->block_last_id - 1; ++i) {
-        if ((disk->blocks[i].start + disk->blocks[i].size) == disk->blocks[i + 1].start) {
+    for (int64 i = 0; i < disk->blocks_count - 1; ++i) {
+        struct Block current_block = disk->blocks[i];
+        struct Block next_block = disk->blocks[i + 1];
+
+        if ((current_block.start + current_block.size) == next_block.start
+            && current_block.file_id == -1 && next_block.file_id == -1)
+        {
             disk->blocks[i].size += disk->blocks[i + 1].size;
             disk->blocks[i + 1].size = 0;
             ++count_zero_blocks;
         }
     }
 
-    int64 old_blocks_size = disk->block_last_id;
+    int64 blocks_count_old = disk->blocks_count;
     disk->block_last_id -= count_zero_blocks;
-    struct Block *new_blocks = malloc(sizeof(struct Block) * (disk->block_last_id));
-    for (int64 i = 0; i < old_blocks_size; ++i) {
+
+    struct Block *new_blocks = (struct Block *) malloc(sizeof(struct Block) * (disk->blocks_count));
+    for (int64 i = 0; i < blocks_count_old; ++i) {
         if (disk->blocks[i].size) {
             new_blocks[i] = disk->blocks[i];
         }
     }
-
+    free(disk->blocks);
     disk->blocks = new_blocks;
 }
 
 void command_delete(struct Disk *disk, int64 file_id)
 {
     struct File *file = NULL;
-    if (disk->files == NULL) {
+    if (!disk->files_count) {
         return;
     }
 
@@ -172,9 +204,12 @@ void command_delete(struct Disk *disk, int64 file_id)
         return;
     }
 
+    // Erase block from file
     for (int i = 0; i < file->blocks_count; ++i) {
-        disk->blocks[file->blocks[i]].file_id = -1;
+        disk->blocks[file->blocks_ids[i]].file_id = -1;
     }
+    free(file->blocks_ids);
+    file->blocks_count = 0;
 
     defragmentation(disk);
 }
@@ -196,22 +231,51 @@ void command_append(struct Disk *disk, int64 file_id, int64 size,
 
     while (size) {
         int64 block_id = strategy(size, disk->blocks, disk->block_last_id, disk->block_last_id);
+        disk->blocks[block_id].file_id = file_id;
+
         if (disk->blocks[block_id].size == size) {
-            size = 0;
-            disk->blocks[block_id].file_id = file_id;
-        } else if (disk->blocks[block_id].size >= size) {
-            int64 block_new_size = disk->blocks[block_id].size - size;
             disk->blocks[block_id].size = size;
 
-            // Fragmentation
-            disk->blocks[disk->block_last_id].size = block_new_size;
-            disk->blocks[disk->block_last_id].start = disk->blocks[block_id].start + size;
+            int64 *new_blocks = (int64 *) malloc(sizeof(int64) * (file->blocks_count + 1));
+            for (int64 i = 0; i < file->blocks_count; ++i) {
+                new_blocks[i] = file->blocks_ids[i];
+            }
+            file->blocks_count++;
+            new_blocks[file->blocks_count] = block_id;
+            file->blocks_ids = new_blocks;
+        } else if (disk->blocks[block_id].size >= size) {
+            int64 block_new_size = disk->blocks[block_id].size - size;
+
+            disk->blocks[block_id].size = size;
+
+            int64 *file_new_blocks = (int64 *) malloc(sizeof(int64) * (file->blocks_count + 1));
+            for (int64 i = 0; i < file->blocks_count; ++i) {
+                file_new_blocks[i] = file->blocks_ids[i];
+            }
+            if (file->blocks_count) {
+                free(file->blocks_ids);
+            }
+            file->blocks_count++;
+            file_new_blocks[file->blocks_count] = block_id;
+            file->blocks_ids = file_new_blocks;
+
+            // Create new block
+            printf("Try to allocate %lld memory", sizeof(struct Block) * (disk->blocks_count + 1));
+            struct Block *new_blocks = (struct Block *) malloc(sizeof(struct Block) * (disk->blocks_count + 1));
+            for (int64 i = 0; i < disk->blocks_count; ++i) {
+                if (disk->blocks[i].size) {
+                    new_blocks[i] = disk->blocks[i];
+                }
+            }
+            free(disk->blocks);
+            disk->blocks = new_blocks;
             disk->block_last_id++;
-            size = 0;
-        } else {
-            disk->blocks[block_id].file_id = file_id;
-            size -= disk->blocks[block_id].size;
+            disk->blocks[disk->block_last_id].start = disk->blocks[block_id].start + disk->blocks[block_id].size;
+            disk->blocks[disk->block_last_id].size = block_new_size;
+            disk->blocks[disk->block_last_id].file_id = -1;
         }
+
+        size -= disk->blocks[block_id].size;
     }
 }
 
@@ -220,15 +284,19 @@ void command_write(struct Disk *disk, int64 file_id, int64 size,
 {
     command_delete(disk, file_id);
 
-    if (file_id >= disk->file_last_id) {
-        struct File *new_files = malloc(sizeof(struct File) * disk->file_last_id + 1);
-        for (int64 i = 0; i < disk->file_last_id; ++i) {
+    if (disk->files_count < file_id) {
+        struct File *new_files = (struct File *) malloc(sizeof(struct File) * (disk->files_count + 1));
+        for (int64 i = 0; i < disk->files_count; ++i) {
             new_files[i] = disk->files[i];
+        }
+        if (disk->files_count) {
+            free(disk->files);
         }
         disk->files = new_files;
         disk->files[disk->file_last_id].file_id = file_id;
         disk->files[disk->file_last_id].blocks_count = 0;
         disk->file_last_id++;
+        disk->files_count++;
     }
 
     command_append(disk, file_id, size, strategy);
