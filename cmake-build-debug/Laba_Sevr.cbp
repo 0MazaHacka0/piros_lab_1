@@ -76,6 +76,30 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Block.c">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Block.h">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Command.c">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Command.h">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Disk.c">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/Disk.h">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/File.c">
+			<Option target="Laba_Sevr"/>
+		</Unit>
+		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/File.h">
+			<Option target="Laba_Sevr"/>
+		</Unit>
 		<Unit filename="/home/atom/Projects/Paid_Projects/Laba_Sevr/main.c">
 			<Option target="Laba_Sevr"/>
 		</Unit>
