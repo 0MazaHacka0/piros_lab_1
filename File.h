@@ -5,10 +5,13 @@
 #ifndef LABA_SEVR_FILE_H
 #define LABA_SEVR_FILE_H
 
+#define FILE_BLOCKS_SIZE 1000
+
 typedef long long int int64;
 
 struct File {
     int64 file_id;
+    int64 blocks_size;
     int64 block_last_id;
     int64 blocks_count;
     int64 *blocks_ids;

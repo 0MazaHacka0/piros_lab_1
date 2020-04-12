@@ -44,9 +44,6 @@ void command_delete(struct Disk *disk, int64 file_id)
     for (int i = 0; i < file->blocks_count; ++i) {
         disk->blocks[file->blocks_ids[i]].file_id = -1;
     }
-    if (file->blocks_count) {
-        free(file->blocks_ids);
-    }
     file->block_last_id = 0;
     file->blocks_count = 0;
 
@@ -72,11 +69,16 @@ void command_append(struct Disk *disk, int64 file_id, int64 size,
         int64 block_id = strategy(size, disk->blocks, disk->block_last_id, disk->block_last_id);
         disk->blocks[block_id].file_id = file_id;
 
-        if (file->blocks_count) {
-            file->blocks_ids = realloc(file->blocks_ids, sizeof(int64) * (file->blocks_count + 1));
-        } else {
-            file->blocks_ids = calloc(sizeof(int64), 1);
+        if ((file->blocks_count + 1) > file->blocks_size) {
+            if (file->blocks_count) {
+                file->blocks_size *= 2;
+                file->blocks_ids = realloc(file->blocks_ids, sizeof(int64) * (file->blocks_size));
+            } else {
+                file->blocks_size = FILE_BLOCKS_SIZE;
+                file->blocks_ids = calloc(sizeof(int64), FILE_BLOCKS_SIZE);
+            }
         }
+
         file->block_last_id++;
         file->blocks_count++;
         file->blocks_ids[file->block_last_id] = block_id;
@@ -105,6 +107,7 @@ void command_write(struct Disk *disk, int64 file_id, int64 size,
     command_delete(disk, file_id);
 
     if (disk->files_count < file_id || disk->files_count == 0) {
+
         if (disk->files_count) {
             disk->files = realloc(disk->files, sizeof(struct File) * (disk->files_count + 1));
         } else {
@@ -116,6 +119,10 @@ void command_write(struct Disk *disk, int64 file_id, int64 size,
         disk->files[disk->file_last_id].file_id = file_id;
         disk->files[disk->file_last_id].blocks_count = 0;
         disk->files[disk->file_last_id].block_last_id = -1;
+
+        disk->files[disk->file_last_id].blocks_size = FILE_BLOCKS_SIZE;
+        disk->files[disk->file_last_id].blocks_ids = calloc(sizeof(int64), FILE_BLOCKS_SIZE);
+
         disk->files_count++;
     }
 
